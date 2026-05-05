@@ -1,41 +1,41 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { db } = require('@vercel/postgres');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 const SECRET_KEY = process.env.SECRET_KEY || 'super-secret-key-for-jwt-development';
 
 // Middleware
 app.use(express.json());
 app.use(cors());
-// Static serving is now handled by Vercel rewrites
 
-// Database Setup
-const dbPath = ':memory:';
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
-        db.run(`CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT
-        )`);
-        db.run(`CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT,
-            content TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )`);
+// Database Initialization (Postgres)
+const initDB = async () => {
+    try {
+        const client = await db.connect();
+        await client.sql`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            );
+        `;
+        await client.sql`
+            CREATE TABLE IF NOT EXISTS notes (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                title TEXT,
+                content TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `;
+        console.log('Postgres Database initialized');
+    } catch (err) {
+        console.error('Database initialization error:', err);
     }
-});
+};
 
 // Auth Middleware
 const authenticateToken = (req, res, next) => {
@@ -59,24 +59,30 @@ app.post('/api/signup', async (req, res) => {
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function(err) {
-            if (err) {
-                return res.status(400).json({ error: 'Username already exists' });
-            }
-            res.status(201).json({ message: 'User created successfully', id: this.lastID });
-        });
-    } catch (e) {
+        const { rows } = await db.sql`
+            INSERT INTO users (username, password) 
+            VALUES (${username}, ${hashedPassword}) 
+            RETURNING id
+        `;
+        res.status(201).json({ message: 'User created successfully', id: rows[0].id });
+    } catch (err) {
+        if (err.code === '23505') { // Unique violation
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // 2. Login
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-        if (err) return res.status(500).json({ error: 'Server error' });
+    try {
+        const { rows } = await db.sql`SELECT * FROM users WHERE username = ${username}`;
+        const user = rows[0];
+
         if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
         const match = await bcrypt.compare(password, user.password);
@@ -84,53 +90,78 @@ app.post('/api/login', (req, res) => {
 
         const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '24h' });
         res.json({ token, username: user.username });
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // 3. Get Notes
-app.get('/api/notes', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM notes WHERE user_id = ? ORDER BY created_at DESC', [req.user.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: 'Server error' });
+app.get('/api/notes', authenticateToken, async (req, res) => {
+    try {
+        const { rows } = await db.sql`
+            SELECT * FROM notes 
+            WHERE user_id = ${req.user.id} 
+            ORDER BY created_at DESC
+        `;
         res.json(rows);
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // 4. Create Note
-app.post('/api/notes', authenticateToken, (req, res) => {
+app.post('/api/notes', authenticateToken, async (req, res) => {
     const { title, content } = req.body;
-    db.run('INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)', [req.user.id, title, content], function(err) {
-        if (err) return res.status(500).json({ error: 'Server error' });
-        res.status(201).json({ id: this.lastID, title, content, created_at: new Date().toISOString() });
-    });
+    try {
+        const { rows } = await db.sql`
+            INSERT INTO notes (user_id, title, content) 
+            VALUES (${req.user.id}, ${title}, ${content}) 
+            RETURNING id, title, content, created_at
+        `;
+        res.status(201).json(rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // 5. Delete Note
-app.delete('/api/notes/:id', authenticateToken, (req, res) => {
+app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     const noteId = req.params.id;
-    db.run('DELETE FROM notes WHERE id = ? AND user_id = ?', [noteId, req.user.id], function(err) {
-        if (err) return res.status(500).json({ error: 'Server error' });
-        if (this.changes === 0) return res.status(404).json({ error: 'Note not found or unauthorized' });
+    try {
+        const { rowCount } = await db.sql`
+            DELETE FROM notes 
+            WHERE id = ${noteId} AND user_id = ${req.user.id}
+        `;
+        if (rowCount === 0) return res.status(404).json({ error: 'Note not found or unauthorized' });
         res.json({ message: 'Note deleted' });
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // 6. Update Note
-app.put('/api/notes/:id', authenticateToken, (req, res) => {
+app.put('/api/notes/:id', authenticateToken, async (req, res) => {
     const noteId = req.params.id;
     const { title, content } = req.body;
-    db.run('UPDATE notes SET title = ?, content = ? WHERE id = ? AND user_id = ?', [title, content, noteId, req.user.id], function(err) {
-        if (err) return res.status(500).json({ error: 'Server error' });
-        if (this.changes === 0) return res.status(404).json({ error: 'Note not found or unauthorized' });
+    try {
+        const { rowCount } = await db.sql`
+            UPDATE notes 
+            SET title = ${title}, content = ${content} 
+            WHERE id = ${noteId} AND user_id = ${req.user.id}
+        `;
+        if (rowCount === 0) return res.status(404).json({ error: 'Note not found or unauthorized' });
         res.json({ message: 'Note updated' });
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
-// The catch-all is now handled by Vercel rewrites in vercel.json
-
-if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
-    });
-}
+// Initialize DB tables
+initDB();
 
 module.exports = app;
