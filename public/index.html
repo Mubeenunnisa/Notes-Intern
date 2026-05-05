@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Made by Mubee Notes</title>
+    <meta name="description" content="A beautiful, secure note-taking application.">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="toast-container"></div>
+    
+    <!-- Auth Section -->
+    <div id="auth-container" class="glass-panel active">
+        <div class="auth-header">
+            <div class="logo">
+                <i class="fa-solid fa-feather-pointed"></i> Made by Mubee Notes
+            </div>
+            <p>Capture your thoughts securely.</p>
+        </div>
+        
+        <div class="auth-toggle">
+            <button id="toggle-login" class="active">Login</button>
+            <button id="toggle-signup">Sign Up</button>
+        </div>
+
+        <form id="auth-form">
+            <div class="input-group">
+                <i class="fa-solid fa-user"></i>
+                <input type="text" id="username" placeholder="Username" required autocomplete="username">
+            </div>
+            <div class="input-group">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+            </div>
+            <button type="submit" id="auth-submit-btn" class="primary-btn">Login</button>
+        </form>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-container" class="hidden">
+        <header class="glass-header">
+            <div class="logo">
+                <i class="fa-solid fa-feather-pointed"></i> Made by Mubee
+            </div>
+            <div class="user-controls">
+                <span id="user-greeting">Hello, User</span>
+                <button id="logout-btn" class="secondary-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <aside class="sidebar glass-panel">
+                <button id="new-note-btn" class="primary-btn full-width"><i class="fa-solid fa-plus"></i> New Note</button>
+                <div class="note-list-header">
+                    <h3>Your Notes</h3>
+                </div>
+                <div id="notes-list" class="notes-list">
+                    <!-- Notes will be injected here -->
+                </div>
+            </aside>
+            
+            <section class="editor glass-panel">
+                <div id="empty-state" class="empty-state active">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <h2>Select a note or create a new one</h2>
+                </div>
+                
+                <div id="active-editor" class="active-editor hidden">
+                    <input type="text" id="note-title" placeholder="Note Title..." autocomplete="off">
+                    <textarea id="note-content" placeholder="Start writing your thoughts here..."></textarea>
+                    <div class="editor-actions">
+                        <span id="save-status">Saved</span>
+                        <button id="delete-note-btn" class="danger-btn"><i class="fa-solid fa-trash"></i> Delete Note</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
