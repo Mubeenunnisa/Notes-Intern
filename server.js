@@ -15,7 +15,8 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Database Setup
-const db = new sqlite3.Database('./database.sqlite', (err) => {
+const dbPath = process.env.VERCEL ? '/tmp/database.sqlite' : './database.sqlite';
+const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err.message);
     } else {
@@ -124,6 +125,10 @@ app.put('/api/notes/:id', authenticateToken, (req, res) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
