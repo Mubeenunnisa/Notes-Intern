@@ -15,7 +15,7 @@ app.use(cors());
 // Static serving is now handled by Vercel rewrites
 
 // Database Setup
-const dbPath = process.env.VERCEL ? '/tmp/database.sqlite' : './database.sqlite';
+const dbPath = ':memory:';
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err.message);
