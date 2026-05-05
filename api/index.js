@@ -12,7 +12,7 @@ const SECRET_KEY = process.env.SECRET_KEY || 'super-secret-key-for-jwt-developme
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+// Static serving is now handled by Vercel rewrites
 
 // Database Setup
 const dbPath = process.env.VERCEL ? '/tmp/database.sqlite' : './database.sqlite';
@@ -125,10 +125,7 @@ app.put('/api/notes/:id', authenticateToken, (req, res) => {
     });
 });
 
-// Catch-all to serve index.html for any other routes (SPA support)
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// The catch-all is now handled by Vercel rewrites in vercel.json
 
 if (require.main === module) {
     app.listen(PORT, () => {
