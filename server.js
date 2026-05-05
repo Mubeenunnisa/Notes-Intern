@@ -125,7 +125,12 @@ app.put('/api/notes/:id', authenticateToken, (req, res) => {
     });
 });
 
-if (process.env.NODE_ENV !== 'production' && require.main === module) {
+// Catch-all to serve index.html for any other routes (SPA support)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
     });
